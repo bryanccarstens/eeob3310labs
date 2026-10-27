@@ -1,0 +1,174 @@
+---
+title: "Primate BRCA1 Protein Alignment"
+output: html_document
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE, message = FALSE)
+library(shiny)
+library(Biostrings)
+library(msa)
+library(base64enc)
+source("alignment_utils.R")
+
+img_dir <- file.path(getwd(), "primate_images")
+if (dir.exists(img_dir)) {
+  addResourcePath("species_img", img_dir)
+}
+
+species_info <- data.frame(
+  scientific = c("Homo sapiens", "Pan troglodytes", "Gorilla gorilla",
+    "Pongo pygmaeus", "Hylobates lar", "Macaca mulatta",
+    "Papio anubis", "Saimiri sciureus", "Callithrix jacchus"),
+  common = c("Human", "Chimpanzee", "Western Gorilla",
+    "Bornean Orangutan", "White-handed Gibbon", "Rhesus Macaque",
+    "Olive Baboon", "Common Squirrel Monkey", "Common Marmoset"),
+  group = c("Great Ape", "Great Ape", "Great Ape",
+    "Great Ape", "Lesser Ape", "Old World Monkey",
+    "Old World Monkey", "New World Monkey", "New World Monkey"),
+  stringsAsFactors = FALSE
+)
+
+species_img_uris <- sapply(species_info$scientific, function(sp) {
+  safe_name <- gsub(" ", "_", sp)
+  img_file <- normalizePath(paste0("primate_images/", safe_name, ".png"), mustWork = FALSE)
+  if (file.exists(img_file)) {
+    raw <- readBin(img_file, "raw", file.info(img_file)$size)
+    paste0("data:image/png;base64,", base64encode(raw))
+  } else ""
+})
+
+all_seqs <- readAAStringSet("primate_BRCA1.fasta")
+aligned_seqs <- readAAStringSet("primate_BRCA1_aligned.fasta")
+aligned_chars <- as.character(aligned_seqs)
+full_alignment_html <- build_alignment_html(aligned_chars, "full", aa_colors, label_width = 210, img_uris = species_img_uris)
+```
+
+## Introduction
+
+Good pedagogy here
+
+## Full Alignment
+
+```{r full-alignment, results='asis'}
+cat(full_alignment_html)
+```
+
+## Select Subset
+
+Optionally select species to re-align a subset.
+
+```{r species-selector, results='asis'}
+cat('
+<style>
+  .sp-card {
+    background: #fff;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+  }
+  .sp-card.selected {
+    border-color: #566db0;
+    background: #f0f4ff;
+    opacity: 1;
+  }
+  .sp-card.deselected {
+    opacity: 0.4;
+  }
+  .sp-card img {
+    width: 40px;
+    height: 40px;
+    object-fit: contain;
+  }
+  .sp-name {
+    font-weight: bold;
+    font-size: 14px;
+    font-style: italic;
+  }
+  .sp-common {
+    font-size: 12px;
+    color: #666;
+  }
+</style>
+')
+
+cat('<div id="species-grid" style="display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:16px 0;">')
+for (i in seq_len(nrow(species_info))) {
+  sp <- species_info$scientific[i]
+  safe <- gsub(" ", "_", sp)
+  uri <- paste0("species_img/", safe, ".png")
+  cat(paste0(
+    '<div class="sp-card deselected" data-species="', sp, '" onclick="toggleSpecies(this)">',
+    '<img src="', uri, '">',
+    '<div>',
+    '<div class="sp-name">', sp, '</div>',
+    '<div class="sp-common">', species_info$common[i], ' (', species_info$group[i], ')</div>',
+    '</div></div>'
+  ))
+}
+cat('</div>')
+
+cat('
+<script>
+function toggleSpecies(el) {
+  el.classList.toggle("selected");
+  el.classList.toggle("deselected");
+  updateShinySelection();
+}
+function updateShinySelection() {
+  var cards = document.querySelectorAll(".sp-card.selected");
+  var selected = [];
+  cards.forEach(function(c) { selected.push(c.getAttribute("data-species")); });
+  Shiny.setInputValue("selected_species", selected);
+}
+document.addEventListener("DOMContentLoaded", function() {
+  setTimeout(function() { Shiny.setInputValue("selected_species", []); }, 300);
+});
+</script>
+')
+```
+
+```{r align-button}
+fluidRow(
+  column(12, style = "display:flex; align-items:center; gap:12px;",
+    actionButton("align", "Re-Align Subset", class = "btn-primary",
+      style = "background:#566db0; border:none; color:white; padding:10px 24px; font-size:16px;"),
+    tags$div(id = "align-spinner", style = "display:none; align-items:center; gap:8px;",
+      HTML('<div style="width:18px; height:18px; border:2px solid #ddd; border-top:2px solid #566db0; border-radius:50%; animation:spin 0.8s linear infinite;"></div>
+        <span style="color:#666; font-size:13px;">Aligning...</span>
+        <style>@keyframes spin { to { transform:rotate(360deg); } }</style>')
+    ),
+    tags$script(HTML("
+      $(document).on('click', '#align', function() {
+        $('#align-spinner').css('display', 'flex');
+      });
+      $(document).on('shiny:idle', function() {
+        $('#align-spinner').css('display', 'none');
+      });
+    "))
+  )
+)
+```
+
+```{r subset-alignment-logic}
+observeEvent(input$align, {
+  req(length(input$selected_species) >= 2)
+  selected_seqs <- all_seqs[names(all_seqs) %in% input$selected_species]
+  aln <- msa(selected_seqs, method = "ClustalOmega")
+  aln_chars <- as.character(unmasked(as(aln, "AAMultipleAlignment")))
+  output$subset_alignment <- renderUI({
+    HTML(build_alignment_html(aln_chars, "subset", aa_colors, label_width = 210, img_uris = species_img_uris))
+  })
+})
+uiOutput("subset_alignment")
+```
+
+
+
