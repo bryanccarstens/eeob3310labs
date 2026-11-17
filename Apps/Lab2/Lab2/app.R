@@ -4,7 +4,7 @@ library(shiny)
 library(bslib)
 library(IsoplotR)
 
-base_url <- "https://github.com/bryanccarstens/eeob3310labs/tree/main/Apps/Lab2/Lab2"
+base_url <- "https://github.com/bryanccarstens/eeob3310labs/tree/main/Apps/Lab2/Lab2/"
 img_url  <- paste0(base_url, "tb.jpg")
 
 # Melchor et al. (2023): Terror Bird Sample C893
