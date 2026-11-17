@@ -5,7 +5,7 @@ library(bslib)
 library(Biostrings)
 library(msa)
 
-base_url <- "https://github.com/bryanccarstens/eeob3310labs/tree/main/Apps/Lab1"
+base_url <- "https://github.com/bryanccarstens/eeob3310labs/tree/main/Apps/Lab1/"
 
 aln_file <- tempfile(fileext = ".fasta")
 download.file(paste0(base_url, "ssu_rRNA_aligned.fasta"), aln_file, quiet = TRUE)
