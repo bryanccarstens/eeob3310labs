@@ -3,7 +3,7 @@
 library(shiny)
 library(bslib)
 
-base_url <- "https://github.com/bryanccarstens/eeob3310labs/tree/main/Data/Lab3"
+base_url <- "https://github.com/bryanccarstens/eeob3310labs/tree/main/Data/Lab3/"
 data_url <- paste0(base_url, "HO_Data/")
 img_url  <- paste0(base_url, "hoary.jpg")
 
